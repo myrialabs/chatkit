@@ -1,6 +1,6 @@
 {
   "name": "@myrialabs/chatkit",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "One unified, typed API to receive and send messages across Telegram, WhatsApp (Baileys & Cloud API), Discord and Slack — a universal message envelope, capability descriptors and a built-in WhatsApp safety layer, for Node and Bun.",
   "type": "module",
   "publishConfig": {
