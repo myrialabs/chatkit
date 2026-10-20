@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.inbox-key
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+media-store/

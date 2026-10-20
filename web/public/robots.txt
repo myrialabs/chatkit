@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://chatkit.myrialabs.dev/sitemap.xml

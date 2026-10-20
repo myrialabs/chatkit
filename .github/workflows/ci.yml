@@ -1,0 +1,152 @@
+name: CI & Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Check, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Unit tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+      - name: Verify build output
+        run: |
+          for f in dist/index.js dist/index.d.ts dist/cli.js dist/adapters/telegram.js dist/verify/index.js dist/store/index.js; do
+            if [ ! -f "$f" ]; then echo "Build failed — missing $f"; exit 1; fi
+          done
+          echo "dist artifacts present."
+
+  node-matrix:
+    name: Smoke test on Node ${{ matrix.node }}
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install & build
+        run: bun install && bun run build
+
+      - name: Import & construct under Node
+        run: |
+          node --input-type=module -e "
+            import { ChatKit, text, splitMessage } from './dist/index.js';
+            import { TelegramAdapter } from './dist/adapters/telegram.js';
+            import { verifyTelegram } from './dist/verify/index.js';
+            import { SqliteStore } from './dist/store/index.js';
+            const chat = new ChatKit();
+            chat.use(new TelegramAdapter({ token: 't', account: 'bot' }));
+            const ok1 = chat.capabilities('telegram').supports.media.includes('image');
+            const ok2 = verifyTelegram('s', 's') === true && verifyTelegram('s', 'x') === false;
+            const ok3 = splitMessage('x'.repeat(10), { limit: 4 }).length === 3;
+            const store = new SqliteStore({ path: ':memory:', stateKey: 'k' });
+            await store.seen('a'); const dup = (await store.seen('a')) === false; await store.close();
+            if (!(ok1 && ok2 && ok3 && dup)) { console.error('smoke failed', { ok1, ok2, ok3, dup }); process.exit(1); }
+            console.log('Node ${{ matrix.node }} smoke OK');
+          "
+
+  pack:
+    name: npm pack smoke test
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Build & pack
+        run: |
+          bun install
+          bun run build
+          npm pack
+          tar -tf myrialabs-chatkit-*.tgz | grep -E 'package/dist/index.js' || (echo "tarball missing required files" && exit 1)
+          echo "Tarball contents verified."
+
+  publish:
+    name: Publish & Release
+    needs: [ci, node-matrix, pack]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install
+        run: bun install
+
+      - name: Build
+        run: bun run build
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

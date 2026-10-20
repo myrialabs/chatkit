@@ -1,0 +1,29 @@
+node_modules/
+/dist/
+*.log
+.DS_Store
+.env
+.env.*.local
+bun.lockb
+*.tsbuildinfo
+*.tgz
+.cache
+coverage/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+tmp/
+
+# Local runtime artifacts produced by examples / the CLI. SQLite databases
+# (chatkit.db, inbox.db, …) and their WAL sidecars are generated on demand and
+# must never be committed — ignore them everywhere, not just at the root.
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+.inbox-key
+media-store/
+baileys_auth/

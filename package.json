@@ -1,0 +1,108 @@
+{
+  "name": "@myrialabs/chatkit",
+  "version": "0.0.0",
+  "description": "One unified, typed API to receive and send messages across Telegram, WhatsApp (Baileys & Cloud API), Discord and Slack — a universal message envelope, capability descriptors and a built-in WhatsApp safety layer, for Node and Bun.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.js"
+    },
+    "./interactive": {
+      "types": "./dist/interactive/index.d.ts",
+      "import": "./dist/interactive/index.js"
+    },
+    "./verify": {
+      "types": "./dist/verify/index.d.ts",
+      "import": "./dist/verify/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware/index.d.ts",
+      "import": "./dist/middleware/index.js"
+    },
+    "./store": {
+      "types": "./dist/store/index.d.ts",
+      "import": "./dist/store/index.js"
+    },
+    "./media": {
+      "types": "./dist/media/index.d.ts",
+      "import": "./dist/media/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "bin": {
+    "chatkit": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13",
+    "bun": ">=1.1"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build"
+  },
+  "keywords": [
+    "chat",
+    "messaging",
+    "telegram",
+    "whatsapp",
+    "baileys",
+    "discord",
+    "slack",
+    "bot",
+    "webhook",
+    "unified-api",
+    "gateway",
+    "conversation",
+    "bun",
+    "typescript"
+  ],
+  "author": "Myria Labs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myrialabs/chatkit.git"
+  },
+  "homepage": "https://github.com/myrialabs/chatkit#readme",
+  "bugs": {
+    "url": "https://github.com/myrialabs/chatkit/issues"
+  },
+  "dependencies": {
+    "@slack/socket-mode": "^2.0.0",
+    "@slack/web-api": "^7.0.0",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "discord.js": "^14.0.0",
+    "zod": "^3.23.0"
+  },
+  "optionalDependencies": {
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "@types/bun": "latest",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.31.0",
+    "globals": "^16.3.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.37.0"
+  }
+}
