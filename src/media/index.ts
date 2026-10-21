@@ -59,6 +59,14 @@ export interface MediaStore {
 	openRead?(id: string): Promise<MediaReadStream | null>;
 }
 
+/**
+ * Release a stream that will not be consumed. Ending the async iterator destroys a
+ * Node `Readable` (closing its file handle) and finalises a generator.
+ */
+export async function releaseStream(stream: AsyncIterable<Uint8Array>): Promise<void> {
+	await stream[Symbol.asyncIterator]().return?.();
+}
+
 /** Buffer an async byte stream into a single `Uint8Array` (fallback path). */
 async function collectStream(source: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
 	const chunks: Uint8Array[] = [];
@@ -129,12 +137,27 @@ export class MediaProxy {
 	 * Outbound (streaming): a byte stream for `content` when it resolves to a handle in
 	 * a stream-capable store, else `null` (caller falls back to {@link resolveOutbound}).
 	 * Inline `data` and external URLs are not streamed — only our own stored handles.
+	 *
+	 * `check` runs against the stream's size before it is handed over (e.g.
+	 * {@link validate}); if it throws, the already-open stream is released so the
+	 * file handle never leaks.
 	 */
-	async openOutboundStream(content: Extract<OutboundContent, { type: 'media' }>): Promise<MediaReadStream | null> {
+	async openOutboundStream(
+		content: Extract<OutboundContent, { type: 'media' }>,
+		check?: (read: MediaReadStream) => void
+	): Promise<MediaReadStream | null> {
 		if (content.data || !content.url || !this.store.openRead) return null;
 		const id = this.store.idFromUrl(content.url);
 		if (!id) return null;
-		return this.store.openRead(id);
+		const read = await this.store.openRead(id);
+		if (!read || !check) return read;
+		try {
+			check(read);
+		} catch (error) {
+			await releaseStream(read.stream);
+			throw error;
+		}
+		return read;
 	}
 
 	/**

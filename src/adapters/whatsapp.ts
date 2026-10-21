@@ -666,9 +666,10 @@ export class WhatsAppBaileysAdapter implements WhatsAppAdapter {
 				// Prefer streaming straight from the store — never buffers the whole file in
 				// RAM. Falls back to a buffer for inline `data` / external URLs / stores that
 				// cannot stream.
-				const streamed = await ctx.media.openOutboundStream(content);
+				const streamed = await ctx.media.openOutboundStream(content, (read) =>
+					ctx.media.validate(this.capabilities(), content, read.size_bytes)
+				);
 				if (streamed) {
-					ctx.media.validate(this.capabilities(), content, streamed.size_bytes);
 					return wrap({ stream: streamed.stream }, streamed.mime, streamed.filename);
 				}
 				const blob = await ctx.media.resolveOutbound(content);

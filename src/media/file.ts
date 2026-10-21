@@ -5,8 +5,8 @@
  * `chatkit-media://<id>` handle is issued and resolved back through this store.
  */
 
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, open, readFile, writeFile, rm } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { join } from 'node:path';
 import { newId } from '../envelope.js';
@@ -96,7 +96,15 @@ export class FileMediaStore implements MediaStore {
 		} catch {
 			return null;
 		}
-		return { stream: createReadStream(join(this.dir, id)), mime: meta.mime, filename: meta.filename, size_bytes: meta.size_bytes };
+		// Open the file up front so a missing blob surfaces here as `null` rather than
+		// as a late, unhandled `ENOENT` emitted by a lazily-opening read stream.
+		let handle;
+		try {
+			handle = await open(join(this.dir, id), 'r');
+		} catch {
+			return null;
+		}
+		return { stream: handle.createReadStream(), mime: meta.mime, filename: meta.filename, size_bytes: meta.size_bytes };
 	}
 
 	async delete(id: string): Promise<void> {

@@ -1,8 +1,31 @@
 import { test, expect, describe } from 'bun:test';
-import { MediaProxy, MemoryMediaStore } from './index.js';
+import { MediaProxy, MemoryMediaStore, releaseStream, type MediaStore } from './index.js';
 import { FileMediaStore } from './file.js';
 import { capabilities, emptySupport } from '../capability.js';
 import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+
+/** An async byte stream that records whether its iterator was ended early. */
+function tracked(bytes: number[]): AsyncIterable<Uint8Array> & { released: boolean } {
+	const stream = {
+		released: false,
+		[Symbol.asyncIterator]() {
+			let done = false;
+			return {
+				next: async () => {
+					if (done) return { done: true as const, value: undefined };
+					done = true;
+					return { done: false as const, value: new Uint8Array(bytes) };
+				},
+				return: async () => {
+					stream.released = true;
+					return { done: true as const, value: undefined };
+				}
+			};
+		}
+	};
+	return stream;
+}
 
 const cap = capabilities('telegram', { ...emptySupport(), media: ['image'] });
 
@@ -89,23 +112,60 @@ describe('MediaProxy streaming', () => {
 
 	test('openOutboundStream streams from a stream-capable store, else null', async () => {
 		const dir = './.tmp-media-out-test';
-		const proxy = new MediaProxy(new FileMediaStore({ dir }));
-		async function* source() {
-			yield new Uint8Array([8, 9]);
+		try {
+			const proxy = new MediaProxy(new FileMediaStore({ dir }));
+			async function* source() {
+				yield new Uint8Array([8, 9]);
+			}
+			const stored = await proxy.ingestStream(source(), { mime: 'video/mp4' });
+			const out = await proxy.openOutboundStream({ type: 'media', media_type: 'video', url: stored.url });
+			expect(out?.size_bytes).toBe(2);
+			const chunks: number[] = [];
+			for await (const c of out!.stream) chunks.push(...c);
+			expect(chunks).toEqual([8, 9]);
+
+			// Inline data and foreign URLs are never streamed.
+			expect(await proxy.openOutboundStream({ type: 'media', media_type: 'video', data: new Uint8Array([1]) })).toBeNull();
+			expect(await proxy.openOutboundStream({ type: 'media', media_type: 'video', url: 'https://x/y.mp4' })).toBeNull();
+
+			// A store without openRead returns null (fallback to buffered resolveOutbound).
+			const memProxy = new MediaProxy(new MemoryMediaStore());
+			const memStored = await memProxy.ingest({ data: new Uint8Array([1]), mime: 'video/mp4' });
+			expect(await memProxy.openOutboundStream({ type: 'media', media_type: 'video', url: memStored.url })).toBeNull();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
 		}
-		const stored = await proxy.ingestStream(source(), { mime: 'video/mp4' });
-		const out = await proxy.openOutboundStream({ type: 'media', media_type: 'video', url: stored.url });
-		expect(out?.size_bytes).toBe(2);
+	});
 
-		// Inline data and foreign URLs are never streamed.
-		expect(await proxy.openOutboundStream({ type: 'media', media_type: 'video', data: new Uint8Array([1]) })).toBeNull();
-		expect(await proxy.openOutboundStream({ type: 'media', media_type: 'video', url: 'https://x/y.mp4' })).toBeNull();
+	test('openOutboundStream returns null when the blob vanished behind its sidecar', async () => {
+		const dir = './.tmp-media-missing-test';
+		try {
+			const store = new FileMediaStore({ dir });
+			const proxy = new MediaProxy(store);
+			const stored = await store.put({ data: new Uint8Array([1, 2]), mime: 'video/mp4' });
+			await rm(join(dir, stored.id));
+			expect(await proxy.openOutboundStream({ type: 'media', media_type: 'video', url: stored.url })).toBeNull();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
 
-		// A store without openRead returns null (fallback to buffered resolveOutbound).
-		const memProxy = new MediaProxy(new MemoryMediaStore());
-		const memStored = await memProxy.ingest({ data: new Uint8Array([1]), mime: 'video/mp4' });
-		expect(await memProxy.openOutboundStream({ type: 'media', media_type: 'video', url: memStored.url })).toBeNull();
+	test('openOutboundStream releases the stream when the check throws', async () => {
+		const read = { stream: tracked([1]), mime: 'video/mp4', size_bytes: 1 };
+		const store = { idFromUrl: () => 'x', openRead: async () => read } as unknown as MediaStore;
+		const proxy = new MediaProxy(store);
+		const tooBig = new Error('too big');
+		await expect(
+			proxy.openOutboundStream({ type: 'media', media_type: 'video', url: 'chatkit-media://x' }, () => {
+				throw tooBig;
+			})
+		).rejects.toBe(tooBig);
+		expect(read.stream.released).toBe(true);
+	});
 
-		await rm(dir, { recursive: true, force: true });
+	test('releaseStream ends an unconsumed stream', async () => {
+		const stream = tracked([1, 2]);
+		await releaseStream(stream);
+		expect(stream.released).toBe(true);
 	});
 });

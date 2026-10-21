@@ -383,8 +383,11 @@ gates type & size per capability.
 and `openRead()` so media never has to be fully buffered in memory. `FileMediaStore`
 implements both; `MemoryMediaStore` does not (it is in-RAM by nature). The proxy
 exposes `ingestStream(source, meta)` (inbound; buffers as a fallback when the store
-lacks `putStream`) and `openOutboundStream(content)` (outbound; returns a stream only
+lacks `putStream`) and `openOutboundStream(content, check?)` (outbound; returns a stream only
 for our own handles in a stream-capable store, else `null` → buffered `resolveOutbound`).
+The optional `check(read)` (e.g. a `validate()` call on `read.size_bytes`) runs before
+the stream is returned; if it throws, the stream is released so no file handle leaks.
+`releaseStream(stream)` frees a stream you decide not to consume.
 **All adapters stream inbound media** (Telegram/Discord/Slack/WhatsApp Cloud pipe the
 `fetch` download straight to `ingestStream`); the WhatsApp Baileys adapter also streams
 outbound. With `FileMediaStore` large media move straight to/from disk instead of RAM.
