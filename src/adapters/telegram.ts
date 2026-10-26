@@ -100,6 +100,26 @@ export interface TelegramBotCommand {
 	description: string;
 }
 
+/**
+ * Who a command menu is for (`BotCommandScope`). Telegram shows the most
+ * specific menu that matches: a chat's own, then its chat type's, then the
+ * default. Omitting the scope sets the default menu.
+ */
+export type TelegramCommandScope =
+	| { type: 'default' }
+	| { type: 'all_private_chats' }
+	| { type: 'all_group_chats' }
+	| { type: 'all_chat_administrators' }
+	| { type: 'chat'; chat_id: number | string }
+	| { type: 'chat_administrators'; chat_id: number | string }
+	| { type: 'chat_member'; chat_id: number | string; user_id: number };
+
+export interface TelegramCommandMenuOptions {
+	scope?: TelegramCommandScope;
+	/** Two-letter ISO 639-1 code; the menu then shows only to users with that language. */
+	languageCode?: string;
+}
+
 export interface TelegramSetWebhookOptions {
 	url: string;
 	/** Echoed back in `X-Telegram-Bot-Api-Secret-Token`. Default: the adapter's `secretToken`. */
@@ -270,10 +290,18 @@ export class TelegramAdapter implements Adapter {
 
 	/**
 	 * Publish the command menu users see when they type `/`. Replaces the whole
-	 * list; pass `[]` to clear it.
+	 * list for `scope` (the default menu when omitted); pass `[]` to clear it.
 	 */
-	async setMyCommands(commands: TelegramBotCommand[]): Promise<void> {
-		await this.call('setMyCommands', { commands });
+	async setMyCommands(commands: TelegramBotCommand[], options: TelegramCommandMenuOptions = {}): Promise<void> {
+		await this.call('setMyCommands', { commands, ...menuParams(options) });
+	}
+
+	/**
+	 * Remove the menu set for `scope`, so the next less specific one shows
+	 * again — a chat's own menu falls back to the default.
+	 */
+	async deleteMyCommands(options: TelegramCommandMenuOptions = {}): Promise<void> {
+		await this.call('deleteMyCommands', menuParams(options));
 	}
 
 	/** Telegram's view of the webhook — `last_error_message` is why deliveries are failing. */
@@ -572,6 +600,13 @@ export class TelegramAdapter implements Adapter {
 		}
 		return json.result;
 	}
+}
+
+function menuParams(options: TelegramCommandMenuOptions): Record<string, unknown> {
+	return {
+		...(options.scope ? { scope: options.scope } : {}),
+		...(options.languageCode ? { language_code: options.languageCode } : {})
+	};
 }
 
 function mediaSendMethod(type: MediaType): string {

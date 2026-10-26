@@ -338,6 +338,23 @@ describe('TelegramAdapter', () => {
 			const a = new TelegramAdapter({ token: 't', fetchImpl: mockFetch({ setMyCommands: (init: RequestInit) => ((body = JSON.parse(String(init.body))), true) }) });
 			await a.setMyCommands([{ command: 'new', description: 'Start a new chat' }]);
 			expect(body.commands).toEqual([{ command: 'new', description: 'Start a new chat' }]);
+			expect(body.scope).toBeUndefined();
+		});
+
+		test('setMyCommands and deleteMyCommands carry a scope', async () => {
+			const bodies: Record<string, any> = {};
+			const a = new TelegramAdapter({
+				token: 't',
+				fetchImpl: mockFetch({
+					setMyCommands: (init: RequestInit) => ((bodies.set = JSON.parse(String(init.body))), true),
+					deleteMyCommands: (init: RequestInit) => ((bodies.del = JSON.parse(String(init.body))), true)
+				})
+			});
+			await a.setMyCommands([{ command: 'mcp', description: 'MCP servers' }], { scope: { type: 'chat', chat_id: 42 }, languageCode: 'en' });
+			expect(bodies.set.scope).toEqual({ type: 'chat', chat_id: 42 });
+			expect(bodies.set.language_code).toBe('en');
+			await a.deleteMyCommands({ scope: { type: 'chat', chat_id: 42 } });
+			expect(bodies.del).toEqual({ scope: { type: 'chat', chat_id: 42 } });
 		});
 
 		test('getMe returns the bot identity', async () => {

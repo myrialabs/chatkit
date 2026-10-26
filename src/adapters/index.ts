@@ -12,7 +12,9 @@ export {
 	type TelegramBotInfo,
 	type TelegramWebhookInfo,
 	type TelegramSetWebhookOptions,
-	type TelegramBotCommand
+	type TelegramBotCommand,
+	type TelegramCommandScope,
+	type TelegramCommandMenuOptions
 } from './telegram.js';
 export { WhatsAppBaileysAdapter, type WhatsAppBaileysAdapterOptions } from './whatsapp.js';
 export {

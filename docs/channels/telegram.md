@@ -65,7 +65,7 @@ The handler verifies the secret header, normalises the update, and emits it to
 request — anyone who finds the URL could otherwise inject messages. For local
 experiments only, set `allowUnverified: true`.
 
-`bot.setMyCommands([...])` publishes the `/` command menu.
+`bot.setMyCommands([...], { scope })` publishes the `/` command menu — the default menu without a scope, or one chat's own menu with `{ type: 'chat', chat_id }`. `bot.deleteMyCommands({ scope })` removes a scoped menu so the default shows again.
 
 ## Sending messages
 
